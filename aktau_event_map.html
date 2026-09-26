@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта Мероприятий Актау | Aktau Events Map</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Yandex Maps API v2.1 -->
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=5be22a58-322f-4428-a731-fd76d46d1df2" type="text/javascript"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Yandex Maps Balloon Custom Styles */
+        .ymaps-2-1-0-balloon__content { padding: 0 !important; border-radius: 12px; }
+        .ymaps-2-1-0-balloon { border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3) !important; }
+        .ymaps-2-1-0-balloon__close-button { background-color: rgba(255,255,255,0.8) !important; border-radius: 50% !important; margin: 8px !important; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <div class="md:hidden bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-20">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid me-2 fa-map-location-dot text-cyan-400 text-2xl"></i>
+            <h1 class="font-bold text-lg text-white">Events <span class="text-cyan-400">Aktau</span></h1>
+        </div>
+        <button id="toggle-sidebar-btn" class="p-2 bg-gray-700 rounded-lg text-gray-200 hover:bg-gray-600 focus:outline-none">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <aside id="sidebar" class="fixed md:relative inset-y-0 left-0 w-full md:w-[420px] lg:w-[480px] bg-gray-800/95 backdrop-blur-md border-r border-gray-700/60 z-30 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col h-[calc(100vh-57px)] md:h-screen">
+        
+        <!-- Sidebar Header -->
+        <div class="p-5 border-b border-gray-700 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-cyan-500/30">
+                    <i class="fa-solid fa-location-dot"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Карта Ивентов <span class="text-cyan-400">Актау</span></h1>
+                    <p class="text-xs text-gray-400">Мероприятия города в реальном времени</p>
+                </div>
+            </div>
+            <button id="close-sidebar-btn" class="md:hidden text-gray-400 hover:text-white p-2">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Sidebar Navigation Tabs -->
+        <div class="flex border-b border-gray-700/80 bg-gray-800/50 p-1 gap-1">
+            <button id="tab-events-btn" onclick="switchTab('events')" class="flex-1 py-2.5 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-cyan-600 text-white shadow">
+                <i class="fa-solid fa-list-ul"></i> События (<span id="event-count">0</span>)
+            </button>
+            <button id="tab-add-btn" onclick="switchTab('add')" class="flex-1 py-2.5 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:bg-gray-700/50">
+                <i class="fa-solid fa-plus-circle"></i> Добавить ивент
+            </button>
+        </div>
+
+        <div id="tab-events" class="flex-1 overflow-y-auto p-4 space-y-4">
+            
+            <!-- Category Filter Pills -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Фильтр по категориям</label>
+                <div class="flex flex-wrap gap-1.5" id="category-filters">
+                    <button onclick="filterCategory('all')" data-cat="all" class="cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500 text-white shadow-sm transition">Все</button>
+                    <button onclick="filterCategory('concert')" data-cat="concert" class="cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition">🎵 Концерты</button>
+                    <button onclick="filterCategory('sport')" data-cat="sport" class="cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition">⚽ Спорт</button>
+                    <button onclick="filterCategory('education')" data-cat="education" class="cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition">🎓 Образование</button>
+                    <button onclick="filterCategory('culture')" data-cat="culture" class="cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition">🎨 Культура</button>
+                    <button onclick="filterCategory('other')" data-cat="other" class="cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition">✨ Другое</button>
+                </div>
+            </div>
+
+            <hr class="border-gray-700/60">
+
+            <!-- Events List Container -->
+            <div id="events-container" class="space-y-3">
+                <!-- Dynamically filled -->
+            </div>
+            
+            <div id="empty-state" class="hidden text-center py-10">
+                <i class="fa-solid fa-calendar-xmark text-4xl text-gray-600 mb-3 block"></i>
+                <p class="text-gray-400 text-sm">Мероприятий не найдено</p>
+            </div>
+        </div>
+
+        <div id="tab-add" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+            <form id="event-form" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                
+                <div>
+                    <label for="title" class="block text-xs font-semibold text-gray-300 mb-1">Название мероприятия *</label>
+                    <input type="text" id="title" required placeholder="Например: Рок-концерт на Скальной тропе" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="category" class="block text-xs font-semibold text-gray-300 mb-1">Категория *</label>
+                        <select id="category" required class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-cyan-500 transition">
+                            <option value="concert">🎵 Концерт / Музыка</option>
+                            <option value="sport">⚽ Спорт / Активность</option>
+                            <option value="education">🎓 IT / Образование</option>
+                            <option value="culture">🎨 Выставка / Культура</option>
+                            <option value="other">✨ Разное / Фестиваль</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="datetime" class="block text-xs font-semibold text-gray-300 mb-1">Дата и время *</label>
+                        <input type="datetime-local" id="datetime" required class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-cyan-500 transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="address" class="block text-xs font-semibold text-gray-300 mb-1">Адрес в г. Актау *</label>
+                    <div class="relative">
+                        <input type="text" id="address" required placeholder="Например: 4 микрорайон, Скальная тропа" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition">
+                        <i class="fa-solid fa-location-crosshairs absolute right-3 top-2.5 text-gray-500"></i>
+                    </div>
+                    <p class="text-[11px] text-gray-400 mt-1">Автоматически геокодируется на карте через Яндекс API.</p>
+                </div>
+
+                <div>
+                    <label for="organizer" class="block text-xs font-semibold text-gray-300 mb-1">Организатор *</label>
+                    <input type="text" id="organizer" required placeholder="Имя или название компании" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition">
+                </div>
+
+                <div>
+                    <label for="image" class="block text-xs font-semibold text-gray-300 mb-1">Ссылка на обложку (URL, необязательно)</label>
+                    <input type="url" id="image" placeholder="https://images.unsplash.com/..." class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition">
+                </div>
+
+                <div>
+                    <label for="description" class="block text-xs font-semibold text-gray-300 mb-1">Описание *</label>
+                    <textarea id="description" rows="3" required placeholder="Расскажите подробнее о программе, входе, билетах..." class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition resize-none"></textarea>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" id="submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold py-2.5 rounded-lg shadow-lg shadow-cyan-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i>Опубликовать на карте
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="p-3 border-t border-gray-700/80 bg-gray-900/40 text-center text-xs text-gray-500">
+            Разработано для событий города Актау &bull; Yandex Maps API
+        </div>
+    </aside>
+
+    <main class="flex-1 relative h-[calc(100vh-57px)] md:h-screen w-full bg-gray-950">
+        <!-- Map Canvas -->
+        <div id="map" class="w-full h-full"></div>
+
+        <!-- Map Loading Overlay -->
+        <div id="map-loader" class="absolute inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-10 transition-opacity duration-500">
+            <div class="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p class="text-gray-300 font-medium text-sm">Загрузка карты Актау...</p>
+        </div>
+
+        <!-- Quick Map Control Floating Buttons -->
+        <div class="absolute bottom-6 right-6 z-10 flex flex-col gap-2">
+            <button onclick="recenterMap()" title="Сбросить к центру Актау" class="w-10 h-10 bg-gray-800/90 hover:bg-gray-700 border border-gray-700 text-white rounded-xl flex items-center justify-center shadow-lg transition backdrop-blur-md">
+                <i class="fa-solid fa-crosshairs"></i>
+            </button>
+            <button onclick="loadSampleData()" title="Перезагрузить демо-события" class="w-10 h-10 bg-gray-800/90 hover:bg-gray-700 border border-gray-700 text-cyan-400 rounded-xl flex items-center justify-center shadow-lg transition backdrop-blur-md">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+    </main>
+
+    <script>
+        // App State
+        let myMap = null;
+        let events = [];
+        let placemarks = [];
+        let activeCategory = 'all';
+
+        // Initial Sample Events for Aktau
+        const sampleEvents = [
+            {
+                id: '1',
+                title: 'Sunset Beach Fest & Live Dj',
+                category: 'concert',
+                datetime: '2026-07-15T19:00',
+                address: 'Актау, 1-й микрорайон, Пляж Набережная',
+                organizer: 'Aktau Wave Sound',
+                description: 'Живой сет от местных DJ на берегу Каспийского моря. Вход свободный, отличные коктейли и огненное шоу на закате!',
+                image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80',
+                coords: [43.6375, 51.1590]
+            },
+            {
+                id: '2',
+                title: 'Мангистау Tech Meetup 2026',
+                category: 'education',
+                datetime: '2026-06-20T15:00',
+                address: 'Актау, 14 микрорайон, IT Hub Aktau',
+                organizer: 'IT Community Mangystau',
+                description: 'Встреча разработчиков, стартаперов и UI/UX дизайнеров Актау. Обсудим искусственный интеллект и веб-технологии.',
+                image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=600&q=80',
+                coords: [43.6480, 51.1680]
+            },
+            {
+                id: '3',
+                title: 'Каспийский Марафон и забег вдоль моря',
+                category: 'sport',
+                datetime: '2026-09-05T08:00',
+                address: 'Актау, 4 микрорайон, Скальная тропа',
+                organizer: 'Aktau Runners Club',
+                description: 'Ежегодный марафон по Скальной тропе на дистанции 5 км, 10 км и 21 км. Регистрация участников открыта!',
+                image: 'https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?auto=format&fit=crop&w=600&q=80',
+                coords: [43.6330, 51.1480]
+            }
+        ];
+
+        // Category Meta Config (Icons and Map Pin Colors)
+        const categoryMeta = {
+            concert: { label: 'Музыка', icon: 'fa-music', color: '#ec4899', preset: 'islands#pinkDotIcon' },
+            sport: { label: 'Спорт', icon: 'fa-volleyball', color: '#10b981', preset: 'islands#greenDotIcon' },
+            education: { label: 'Образование', icon: 'fa-graduation-cap', color: '#0284c7', preset: 'islands#blueDotIcon' },
+            culture: { label: 'Культура', icon: 'fa-palette', color: '#f59e0b', preset: 'islands#orangeDotIcon' },
+            other: { label: 'Разное', icon: 'fa-star', color: '#8b5cf6', preset: 'islands#violetDotIcon' }
+        };
+
+        ymaps.ready(initMap);
+
+        function initMap() {
+            try {
+                // Centered at Aktau Coordinates
+                myMap = new ymaps.Map('map', {
+                    center: [43.6480, 51.1680], // Aktau city center
+                    zoom: 13,
+                    controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
+                }, {
+                    searchControlProvider: 'yandex#search'
+                });
+
+                // Hide Loader
+                document.getElementById('map-loader').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('map-loader').classList.add('hidden');
+                }, 500);
+
+                // Load Initial Events from LocalStorage or Sample Data
+                loadStoredEvents();
+                
+            } catch (error) {
+                showToast('Ошибка при инициализации Яндекс Карт', 'error');
+                console.error(error);
+            }
+        }
+
+        function loadStoredEvents() {
+            const saved = localStorage.getItem('aktau_events_data');
+            if (saved) {
+                try {
+                    events = JSON.parse(saved);
+                } catch(e) {
+                    events = [...sampleEvents];
+                }
+            } else {
+                events = [...sampleEvents];
+                saveStoredEvents();
+            }
+            renderEvents();
+        }
+
+        function saveStoredEvents() {
+            localStorage.setItem('aktau_events_data', JSON.stringify(events));
+        }
+
+        function loadSampleData() {
+            events = [...sampleEvents];
+            saveStoredEvents();
+            renderEvents();
+            showToast('Демонстрационные события восстановлены', 'info');
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submit-btn');
+            const originalBtnHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Геокодирование адреса...`;
+
+            const title = document.getElementById('title').value.trim();
+            const category = document.getElementById('category').value;
+            const datetime = document.getElementById('datetime').value;
+            const address = document.getElementById('address').value.trim();
+            const organizer = document.getElementById('organizer').value.trim();
+            const image = document.getElementById('image').value.trim();
+            const description = document.getElementById('description').value.trim();
+
+            // Full address string targeted at Aktau
+            const fullAddressSearch = address.toLowerCase().includes('актау') 
+                ? address 
+                : `Казахстан, Актау, ${address}`;
+
+            try {
+                // Geocoding via Yandex Geocoder API
+                const res = await ymaps.geocode(fullAddressSearch);
+                const firstGeoObject = res.geoObjects.get(0);
+
+                if (!firstGeoObject) {
+                    throw new Error('Адрес не найден. Пожалуйста, укажите микрорайон или улицу г. Актау.');
+                }
+
+                const coords = firstGeoObject.geometry.getCoordinates();
+
+                const newEvent = {
+                    id: Date.now().toString(),
+                    title,
+                    category,
+                    datetime,
+                    address,
+                    organizer,
+                    image,
+                    description,
+                    coords
+                };
+
+                // Add to array & state
+                events.unshift(newEvent);
+                saveStoredEvents();
+                renderEvents();
+
+                // Clear form
+                document.getElementById('event-form').reset();
+                switchTab('events');
+
+                // Move map camera to new placemark
+                myMap.setCenter(coords, 15, { duration: 800 });
+                
+                showToast('Событие успешно добавлено на карту!', 'success');
+
+                // Open balloon for newly created event
+                setTimeout(() => {
+                    const foundPlacemark = placemarks.find(p => p.eventId === newEvent.id);
+                    if (foundPlacemark) {
+                        foundPlacemark.balloon.open();
+                    }
+                }, 900);
+
+            } catch (err) {
+                showToast(err.message || 'Ошибка определении координат адреса', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        function renderEvents() {
+            if (!myMap) return;
+
+            // Clear map placemarks
+            placemarks.forEach(p => myMap.geoObjects.remove(p));
+            placemarks = [];
+
+            const container = document.getElementById('events-container');
+            const emptyState = document.getElementById('empty-state');
+            container.innerHTML = '';
+
+            const filteredEvents = activeCategory === 'all' 
+                ? events 
+                : events.filter(e => e.category === activeCategory);
+
+            document.getElementById('event-count').textContent = filteredEvents.length;
+
+            if (filteredEvents.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filteredEvents.forEach(evt => {
+                const catInfo = categoryMeta[evt.category] || categoryMeta.other;
+
+                // 1. Create Placemark on Yandex Map
+                const balloonContent = `
+                    <div class="bg-gray-900 text-gray-100 p-4 max-w-xs font-sans rounded-xl">
+                        ${evt.image ? `<img src="${evt.image}" alt="${evt.title}" class="w-full h-32 object-cover rounded-lg mb-3" onerror="this.style.display='none'">` : ''}
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white" style="background-color: ${catInfo.color}">
+                                ${catInfo.label}
+                            </span>
+                            <span class="text-xs text-gray-400"><i class="fa-regular fa-clock me-1"></i>${formatDate(evt.datetime)}</span>
+                        </div>
+                        <h3 class="font-bold text-base text-white mb-1.5 leading-snug">${escapeHtml(evt.title)}</h3>
+                        <p class="text-xs text-cyan-400 mb-2 flex items-start gap-1">
+                            <i class="fa-solid fa-location-dot mt-0.5"></i>
+                            <span>${escapeHtml(evt.address)}</span>
+                        </p>
+                        <p class="text-xs text-gray-300 leading-relaxed mb-3 line-clamp-3">${escapeHtml(evt.description)}</p>
+                        <div class="pt-2 border-t border-gray-800 flex justify-between items-center text-[11px] text-gray-400">
+                            <span>Орг: <strong class="text-gray-200">${escapeHtml(evt.organizer)}</strong></span>
+                        </div>
+                    </div>
+                `;
+
+                const placemark = new ymaps.Placemark(evt.coords, {
+                    balloonContentBody: balloonContent,
+                    hintContent: evt.title
+                }, {
+                    preset: catInfo.preset,
+                    balloonCloseButton: true,
+                    hideIconOnBalloonOpen: false
+                });
+
+                placemark.eventId = evt.id;
+                myMap.geoObjects.add(placemark);
+                placemarks.push(placemark);
+
+                // 2. Render Card in Sidebar List
+                const card = document.createElement('div');
+                card.className = "bg-gray-800/80 hover:bg-gray-750 border border-gray-700/80 hover:border-gray-600 rounded-xl p-3.5 transition duration-200 cursor-pointer shadow-sm group relative";
+                card.onclick = () => focusOnEvent(evt.id, evt.coords);
+
+                card.innerHTML = `
+                    <div class="flex gap-3">
+                        ${evt.image ? `
+                            <img src="${evt.image}" class="w-20 h-20 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/100x100/1e293b/0284c7?text=Event'">
+                        ` : `
+                            <div class="w-20 h-20 rounded-lg bg-gray-700/60 flex flex-col items-center justify-center text-gray-400 flex-shrink-0">
+                                <i class="fa-solid ${catInfo.icon} text-xl" style="color: ${catInfo.color}"></i>
+                            </div>
+                        `}
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded text-white" style="background-color: ${catInfo.color}">
+                                    ${catInfo.label}
+                                </span>
+                                <button onclick="deleteEvent(event, '${evt.id}')" title="Удалить ивент" class="text-gray-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                            <h4 class="font-semibold text-sm text-gray-100 truncate group-hover:text-cyan-400 transition">${escapeHtml(evt.title)}</h4>
+                            <p class="text-xs text-gray-400 mt-1 truncate">
+                                <i class="fa-regular fa-calendar me-1 text-cyan-500"></i>${formatDate(evt.datetime)}
+                            </p>
+                            <p class="text-xs text-gray-400 mt-0.5 truncate">
+                                <i class="fa-solid fa-location-dot me-1 text-red-400"></i>${escapeHtml(evt.address)}
+                            </p>
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function focusOnEvent(id, coords) {
+            if (!myMap) return;
+            
+            myMap.setCenter(coords, 15, { duration: 500 });
+            
+            const placemark = placemarks.find(p => p.eventId === id);
+            if (placemark) {
+                placemark.balloon.open();
+            }
+
+            // Mobile menu auto close on event select
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.add('-translate-x-full');
+            }
+        }
+
+        function deleteEvent(e, id) {
+            e.stopPropagation();
+            if (confirm('Вы уверены, что хотите удалить это мероприятие?')) {
+                events = events.filter(evt => evt.id !== id);
+                saveStoredEvents();
+                renderEvents();
+                showToast('Событие удалено', 'info');
+            }
+        }
+
+        function filterCategory(cat) {
+            activeCategory = cat;
+            document.querySelectorAll('.cat-filter-btn').forEach(btn => {
+                if (btn.dataset.cat === cat) {
+                    btn.className = "cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500 text-white shadow-sm transition";
+                } else {
+                    btn.className = "cat-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition";
+                }
+            });
+            renderEvents();
+        }
+
+        function switchTab(tab) {
+            const eventsTab = document.getElementById('tab-events');
+            const addTab = document.getElementById('tab-add');
+            const eventsBtn = document.getElementById('tab-events-btn');
+            const addBtn = document.getElementById('tab-add-btn');
+
+            if (tab === 'events') {
+                eventsTab.classList.remove('hidden');
+                addTab.classList.add('hidden');
+                eventsBtn.className = "flex-1 py-2.5 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-cyan-600 text-white shadow";
+                addBtn.className = "flex-1 py-2.5 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:bg-gray-700/50";
+            } else {
+                addTab.classList.remove('hidden');
+                eventsTab.classList.add('hidden');
+                addBtn.className = "flex-1 py-2.5 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-cyan-600 text-white shadow";
+                eventsBtn.className = "flex-1 py-2.5 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:bg-gray-700/50";
+            }
+        }
+
+        function recenterMap() {
+            if (myMap) {
+                myMap.setCenter([43.6480, 51.1680], 13, { duration: 500 });
+            }
+        }
+
+        // Helper: Toast Notifications
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-rose-600 text-white',
+                info: 'bg-cyan-600 text-white'
+            };
+
+            const icons = {
+                success: 'fa-circle-check',
+                error: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+
+            toast.className = `${bgColors[type]} p-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-medium transform transition-all duration-300 pointer-events-auto opacity-0 translate-y-2`;
+            toast.innerHTML = `
+                <i class="fa-solid ${icons[type]} text-lg"></i>
+                <span class="flex-1">${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            });
+
+            // Auto dismiss
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Helper: Formatting & Escaping
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const d = new Date(dateString);
+            return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // Mobile Sidebar Toggle Listeners
+        document.getElementById('toggle-sidebar-btn').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        });
+
+        document.getElementById('close-sidebar-btn').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.add('-translate-x-full');
+        });
+    </script>
+</body>
+</html>

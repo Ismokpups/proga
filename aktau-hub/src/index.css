@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #0F4C81;
+  --color-brand-dark: #0a3560;
+  --color-accent: #F97316;
+  --color-accent-dark: #ea6c0a;
+  --color-bg: #F8FAFC;
+  --color-card: #FFFFFF;
+  --color-text: #1E293B;
+  --color-muted: #64748B;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+}
+
+/* Yandex Maps Balloon overrides */
+.ymaps-2-1-79-balloon__content { padding: 0 !important; }
+.ymaps-2-1-79-balloon { border-radius: 14px !important; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.15) !important; }
+
+/* Custom animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(0.85); }
+}
+
+.animate-fade-up { animation: fadeInUp 0.4s ease both; }
+.animate-slide-right { animation: slideInRight 0.35s ease both; }
+.animate-pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* Glassmorphism card */
+.glass {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.5);
+}
+
+/* Map filter overlay pill */
+.map-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  user-select: none;
+}
+.map-pill.active {
+  background: #0F4C81;
+  color: white;
+  border-color: #0F4C81;
+}
+.map-pill:not(.active):hover {
+  border-color: #0F4C81;
+  color: #0F4C81;
+}
